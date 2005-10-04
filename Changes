@@ -1,4 +1,9 @@
 ---
+version: 0.12
+date:    Tue Oct  4 08:46:53 PDT 2005
+changes:
+- Support CamelCase links
+---
 version: 0.11
 date:    Tue Oct  4 07:11:24 PDT 2005
 changes:

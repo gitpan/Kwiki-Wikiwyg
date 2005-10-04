@@ -1,7 +1,7 @@
 package Kwiki::Wikiwyg;
 use Kwiki::Plugin -Base;
 use mixin 'Kwiki::Installer';
-our $VERSION = '0.11'; 
+our $VERSION = '0.12'; 
 use Spoon::Formatter;
 
 const class_id => 'wikiwyg';
@@ -21,7 +21,7 @@ sub register {
 
 sub wikiwyg_use {
     my $p = $self->new_preference('wikiwyg_use');
-    $p->query('Use the Wysiwyg Editor? (IE/Firefox only)');
+    $p->query('Use the Wikiwyg Editor? (IE/Firefox only)');
     $p->type('boolean');
     $p->default(1);
     return $p;
@@ -102,7 +102,6 @@ sub wikiwyg_to_html {
     $opaque =~ s/\n*\z/\n/;
     $opaque =~ s/<!--/<!-=-/g;
     $opaque =~ s/-->/-=->/g;
-    $YAML::UseBlock;
     return sprintf qq{<div class="wikiwyg_opaque"><!-- wiki:\n.%s\n%s.%s\n-->%s</div>},
         $self->method,
         $opaque,
@@ -115,6 +114,7 @@ sub wikiwyg_to_html {
     $self->to_html;
 }
 
+no warnings;
 sub html {
     my $inner = $self->text_filter(join '', 
         map { 
@@ -123,6 +123,7 @@ sub html {
     );
     $self->html_start . $inner . $self->html_end;
 }
+use warnings;
 
 
 package Kwiki::Wikiwyg::CGI;
@@ -163,33 +164,11 @@ __config/wikiwyg.yaml__
 wikiwyg_default: 0
 __javascript/Wikiwyg/Kwiki.js__
 window.onload = function() {
-    var elements = document.getElementsByTagName('div');
-    var mydiv;
-    for (var i = 0; i < elements.length; i++) {
-        if (elements[i].className == 'wiki') {
-            mydiv = elements[i];
-            break;
-        }
+    if (Wikiwyg.is_ie) {
+        return; // XXX Bugs in Wikiwyg.Kwiki on IE right now.
     }
+
     wikiwyg = new Wikiwyg.Kwiki();
-
-    var config = {
-        doubleClickToEdit: false,
-        toolbar: {
-            imagesLocation: 'icons/wikiwyg/'
-        },
-        wysiwyg: {
-            iframeId: 'wikiwyg_iframe'
-        }
-    };
-
-    if (wikiwyg_double_click) {
-        config.doubleClickToEdit = true;
-    }
-
-    wikiwyg.createWikiwygArea(mydiv, config);
-
-    if (!wikiwyg.enabled) return;
 
     // Find the page name
     var elems = document.getElementsByTagName('a');
@@ -200,6 +179,38 @@ window.onload = function() {
             break;
         }
     }
+
+    if (! wikiwyg.page_name) return;
+
+    var elements = document.getElementsByTagName('div');
+    var mydiv;
+    for (var i = 0; i < elements.length; i++) {
+        if (elements[i].className == 'wiki') {
+            mydiv = elements[i];
+            break;
+        }
+    }
+
+    var config = {
+        doubleClickToEdit: false,
+        toolbar: {
+            imagesLocation: 'icons/wikiwyg/'
+        },
+        wysiwyg: {
+            iframeId: 'wikiwyg_iframe'
+        },
+        wikitext: {
+            supportCamelCaseLinks: true
+        }
+    };
+
+    if (wikiwyg_double_click) {
+        config.doubleClickToEdit = true;
+    }
+
+    wikiwyg.createWikiwygArea(mydiv, config);
+
+    if (!wikiwyg.enabled) return;
 
     Wikiwyg.changeLinksMatching(
         'href', /action=edit/, 
@@ -283,11 +294,7 @@ proto.controlLayout = [
 ];
     
 proto.convertWikitextToHtml = function(wikitext, func) {
-    this.wikiwyg.call_action(
-        'wikiwyg_wikitext_to_html', 
-        wikitext,
-        func
-    );
+    this.wikiwyg.call_action('wikiwyg_wikitext_to_html', wikitext, func);
 }
 
 proto.markupRules = {
@@ -297,17 +304,12 @@ proto.markupRules = {
 proto = new Subclass('Wikiwyg.Preview.Kwiki', 'Wikiwyg.Preview');
 
 proto.fromHtml = function(html) {
-    if (this.wikiwyg.previous_mode.classname.match(/Wysiwyg/)) {
+    if (this.wikiwyg.previous_mode.classname.match(/(Wysiwyg|HTML)/)) {
         var wikitext_mode = this.wikiwyg.mode_objects['Wikiwyg.Wikitext.Kwiki'];
         var self = this;
-        wikitext_mode.convertHtmlToWikitext(
-            html,
-            function(wikitext) {
-                wikitext_mode.convertWikitextToHtml(
-                    wikitext,
-                    function(new_html) { self.div.innerHTML = new_html }
-                );
-            }
+        wikitext_mode.convertWikitextToHtml(
+            wikitext_mode.convert_html_to_wikitext(html),
+            function(new_html) { self.div.innerHTML = new_html }
         );
     }
     else {
@@ -1388,6 +1390,7 @@ proto.classtype = 'wikitext';
 proto.modeDescription = 'Wikitext';
 
 proto.config = {
+    supportCamelCaseLinks: false,
     javascriptLocation: null,
     clearRegex: null,
     editHeightMinimum: 10,
@@ -2141,21 +2144,6 @@ proto.format_a = function(element) {
     this.make_wikitext_link(label, element.getAttribute('href'), element);
 }
 
-proto.make_wikitext_link = function(label, href, element) {
-    var before = this.config.markupRules.link[1];
-    var after  = this.config.markupRules.link[2];
-
-    this.assert_space_or_newline();
-    if (! href)
-        this.appendOutput(label);
-    else if (href == label)
-        this.appendOutput(href);
-    else if (this.href_is_wiki_link(href))
-        this.appendOutput(before + label + after);
-    else
-        this.appendOutput(before + href + ' ' + label + after);
-}
-
 proto.format_table = function(element) {
     this.assert_blank_line();
     this.walk(element);
@@ -2357,6 +2345,34 @@ proto.handle_opaque_block = function(element) {
     var text = comment.data;
     text = text.replace(/^\s*wiki:\s+/, '');
     this.appendOutput(text);
+}
+
+proto.make_wikitext_link = function(label, href, element) {
+    var before = this.config.markupRules.link[1];
+    var after  = this.config.markupRules.link[2];
+
+    this.assert_space_or_newline();
+    if (! href) {
+        this.appendOutput(label);
+    }
+    else if (href == label) {
+        this.appendOutput(href);
+    }
+    else if (this.href_is_wiki_link(href)) {
+        if (this.camel_case_link(label))
+            this.appendOutput(label);
+        else
+            this.appendOutput(before + label + after);
+    }
+    else {
+        this.appendOutput(before + href + ' ' + label + after);
+    }
+}
+
+proto.camel_case_link = function(label) {
+    if (! this.config.supportCamelCaseLinks)
+        return false;
+    return label.match(/[a-z][A-Z]/);
 }
 
 proto.href_is_wiki_link = function(href) {
