@@ -1,4 +1,11 @@
 ---
+version: 0.11
+date:    Tue Oct  4 07:11:24 PDT 2005
+changes:
+- Latest wikiwyg code from Socialtext
+- HTML->wiki is all in Javascript now
+- Very simple module from the Perl side
+---
 version: 0.10
 date:    Fri Aug 19 14:15:21 PDT 2005
 changes:
