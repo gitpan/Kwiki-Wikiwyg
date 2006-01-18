@@ -4,4 +4,4 @@ use warnings;
 use Test::More tests => 1;
 use Kwiki::Wikiwyg;
 
-ok(1);
+pass;

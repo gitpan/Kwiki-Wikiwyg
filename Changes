@@ -1,4 +1,10 @@
 ---
+version: 0.13
+date:    Wed Jan 18 04:12:28 PST 2006
+changes:
+- Support IE Now
+- Works better in general
+---
 version: 0.12
 date:    Tue Oct  4 08:46:53 PDT 2005
 changes:
